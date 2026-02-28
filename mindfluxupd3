@@ -1,0 +1,288 @@
+local player = game.Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+
+local savedPosition = nil
+local xrayEnabled = false
+local transparencyAmount = 0.85
+local floatEnabled = false
+local floatForce = nil
+
+------------------------------------------------
+-- FLOAT
+------------------------------------------------
+local function enableFloat()
+	local char = player.Character
+	if not char then return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	if floatForce then floatForce:Destroy() end
+
+	floatForce = Instance.new("BodyVelocity")
+	floatForce.MaxForce = Vector3.new(0, math.huge, 0)
+	floatForce.Velocity = Vector3.new(0,6,0)
+	floatForce.Parent = hrp
+end
+
+local function disableFloat()
+	if floatForce then
+		floatForce:Destroy()
+		floatForce = nil
+	end
+end
+
+------------------------------------------------
+-- ANTI RAGDOLL + NO ANIMS
+------------------------------------------------
+local function applyMods(character)
+	local humanoid = character:WaitForChild("Humanoid")
+
+	humanoid.BreakJointsOnDeath = false
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown,false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Physics,false)
+
+	humanoid.StateChanged:Connect(function(_,new)
+		if new == Enum.HumanoidStateType.Ragdoll
+		or new == Enum.HumanoidStateType.FallingDown
+		or new == Enum.HumanoidStateType.Physics then
+			humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+	end)
+
+	local animate = character:FindFirstChild("Animate")
+	if animate then animate.Disabled = true end
+
+	for _,track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+		track:Stop()
+	end
+
+	if floatEnabled then
+		task.wait(1)
+		enableFloat()
+	end
+end
+
+if player.Character then applyMods(player.Character) end
+player.CharacterAdded:Connect(function(c)
+	task.wait(0.5)
+	applyMods(c)
+end)
+
+------------------------------------------------
+-- RGB BORDER
+------------------------------------------------
+local function createRGBStroke(frame)
+	local stroke = Instance.new("UIStroke",frame)
+	stroke.Thickness = 3
+	local hue = 0
+	RunService.RenderStepped:Connect(function()
+		hue = (hue + 0.003) % 1
+		stroke.Color = Color3.fromHSV(hue,1,1)
+	end)
+end
+
+------------------------------------------------
+-- DRAG
+------------------------------------------------
+local function makeDraggable(frame,bar)
+	local dragging=false
+	local start, pos
+
+	bar.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then
+			dragging=true
+			start=i.Position
+			pos=frame.Position
+		end
+	end)
+
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then
+			dragging=false
+		end
+	end)
+
+	UIS.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+			local delta=i.Position-start
+			frame.Position=UDim2.new(
+				pos.X.Scale,pos.X.Offset+delta.X,
+				pos.Y.Scale,pos.Y.Offset+delta.Y
+			)
+		end
+	end)
+end
+
+------------------------------------------------
+-- XRAY
+------------------------------------------------
+local function setXray(state)
+	for _,obj in pairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			local model=obj:FindFirstAncestorOfClass("Model")
+			if not(model and model:FindFirstChild("Humanoid")) then
+				obj.LocalTransparencyModifier=state and transparencyAmount or 0
+			end
+		end
+	end
+end
+
+------------------------------------------------
+-- GUI ROOT
+------------------------------------------------
+local gui = Instance.new("ScreenGui",player.PlayerGui)
+gui.Name="MindfluxGUI"
+
+------------------------------------------------
+-- MF REOPEN BUTTON
+------------------------------------------------
+local openButton = Instance.new("TextButton",gui)
+openButton.Size=UDim2.new(0,60,0,60)
+openButton.Position=UDim2.new(0,20,0.5,-30)
+openButton.Text="MF"
+openButton.Visible=false
+openButton.BackgroundColor3=Color3.fromRGB(25,25,25)
+openButton.TextColor3=Color3.new(1,1,1)
+openButton.Font=Enum.Font.GothamBold
+openButton.TextScaled=true
+Instance.new("UICorner",openButton).CornerRadius=UDim.new(1,0)
+createRGBStroke(openButton)
+
+------------------------------------------------
+-- WINDOW CREATOR
+------------------------------------------------
+local function createWindow(title,pos)
+	local frame=Instance.new("Frame",gui)
+	frame.Size=UDim2.new(0,300,0,300)
+	frame.Position=pos
+	frame.BackgroundColor3=Color3.fromRGB(20,20,20)
+	Instance.new("UICorner",frame).CornerRadius=UDim.new(0,20)
+	createRGBStroke(frame)
+
+	local top=Instance.new("Frame",frame)
+	top.Size=UDim2.new(1,0,0,40)
+	top.BackgroundTransparency=1
+
+	local label=Instance.new("TextLabel",top)
+	label.Size=UDim2.new(1,-40,1,0)
+	label.BackgroundTransparency=1
+	label.Text=title
+	label.TextColor3=Color3.new(1,1,1)
+	label.Font=Enum.Font.GothamBold
+	label.TextScaled=true
+
+	local close=Instance.new("TextButton",top)
+	close.Size=UDim2.new(0,40,1,0)
+	close.Position=UDim2.new(1,-40,0,0)
+	close.Text="X"
+	close.BackgroundTransparency=1
+	close.TextColor3=Color3.new(1,0.3,0.3)
+	close.TextScaled=true
+
+	close.MouseButton1Click:Connect(function()
+		frame.Visible=false
+		openButton.Visible=true
+	end)
+
+	makeDraggable(frame,top)
+	return frame
+end
+
+local function makeButton(text,pos,parent)
+	local b=Instance.new("TextButton",parent)
+	b.Size=UDim2.new(0.8,0,0.14,0)
+	b.Position=pos
+	b.Text=text
+	b.BackgroundColor3=Color3.fromRGB(40,40,40)
+	b.TextColor3=Color3.new(1,1,1)
+	b.Font=Enum.Font.Gotham
+	b.TextScaled=true
+	Instance.new("UICorner",b).CornerRadius=UDim.new(0,15)
+	return b
+end
+
+------------------------------------------------
+-- BOOSTER
+------------------------------------------------
+local booster=createWindow("Mindflux Booster",UDim2.new(0.2,0,0.3,0))
+
+local boost=makeButton("Boost Speed",UDim2.new(0.1,0,0.15,0),booster)
+local xray=makeButton("Toggle XRay",UDim2.new(0.1,0,0.30,0),booster)
+local floatBtn=makeButton("Toggle Float",UDim2.new(0.1,0,0.45,0),booster)
+local selfKickBtn=makeButton("Kick Yourself",UDim2.new(0.1,0,0.60,0),booster)
+
+local discord=Instance.new("TextLabel",booster)
+discord.Size=UDim2.new(1,0,0,30)
+discord.Position=UDim2.new(0,0,0.88,0)
+discord.BackgroundTransparency=1
+discord.Text="discord.gg/7B3QPDpMyR"
+discord.TextColor3=Color3.fromRGB(170,170,255)
+discord.Font=Enum.Font.Gotham
+discord.TextScaled=true
+
+boost.MouseButton1Click:Connect(function()
+	local c=player.Character
+	if c and c:FindFirstChild("Humanoid") then
+		c.Humanoid.WalkSpeed=50
+	end
+end)
+
+xray.MouseButton1Click:Connect(function()
+	xrayEnabled=not xrayEnabled
+	setXray(xrayEnabled)
+end)
+
+floatBtn.MouseButton1Click:Connect(function()
+	floatEnabled=not floatEnabled
+	if floatEnabled then enableFloat() else disableFloat() end
+end)
+
+-- SELF KICK
+selfKickBtn.MouseButton1Click:Connect(function()
+	player:Kick("you got kicked by mindflux")
+end)
+
+------------------------------------------------
+-- TELEPORT WINDOW
+------------------------------------------------
+local teleporter=createWindow("Mindflux Teleporter",UDim2.new(0.6,0,0.3,0))
+
+local save=makeButton("Save Position",UDim2.new(0.1,0,0.25,0),teleporter)
+local back=makeButton("Teleport Back",UDim2.new(0.1,0,0.5,0),teleporter)
+local spawn=makeButton("Teleport To Base",UDim2.new(0.1,0,0.75,0),teleporter)
+
+save.MouseButton1Click:Connect(function()
+	local c=player.Character
+	if c and c:FindFirstChild("HumanoidRootPart") then
+		savedPosition=c.HumanoidRootPart.Position
+	end
+end)
+
+back.MouseButton1Click:Connect(function()
+	local c=player.Character
+	if savedPosition and c and c:FindFirstChild("HumanoidRootPart") then
+		c:PivotTo(CFrame.new(savedPosition))
+	end
+end)
+
+spawn.MouseButton1Click:Connect(function()
+	local c=player.Character
+	local sp=workspace:FindFirstChildOfClass("SpawnLocation")
+	if c and sp then
+		c:PivotTo(sp.CFrame+Vector3.new(0,5,0))
+	end
+end)
+
+------------------------------------------------
+-- REOPEN MENU
+------------------------------------------------
+openButton.MouseButton1Click:Connect(function()
+	for _,v in pairs(gui:GetChildren()) do
+		if v:IsA("Frame") then
+			v.Visible=true
+		end
+	end
+	openButton.Visible=false
+end)
