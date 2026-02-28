@@ -1,0 +1,128 @@
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- Main UI Container
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+screenGui.Name = "MindfluxMenu"
+screenGui.ResetOnSpawn = false
+
+-- 1. The "M" Toggle Button
+local toggleBtn = Instance.new("TextButton", screenGui)
+toggleBtn.Size = UDim2.new(0, 40, 0, 40)
+toggleBtn.Position = UDim2.new(0.02, 0, 0.4, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+toggleBtn.BackgroundTransparency = 0.2
+toggleBtn.Text = "M"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.SpecialElite -- A stylized "M" font
+toggleBtn.TextSize = 25
+
+local btnCorner = Instance.new("UICorner", toggleBtn)
+btnCorner.CornerRadius = UDim.new(0, 8)
+
+-- 2. The Main Frame
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 220, 0, 280)
+frame.Position = UDim2.new(0.5, -110, 0.5, -140)
+frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+frame.BackgroundTransparency = 0.3
+frame.Visible = false -- Start hidden
+
+local frameCorner = Instance.new("UICorner", frame)
+frameCorner.CornerRadius = UDim.new(0, 12)
+
+-- 3. Dragging Logic Variables
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+	local delta = input.Position - dragStart
+	frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+frame.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		update(input)
+	end
+end)
+
+-- 4. Buttons and Labels
+local saveBtn = Instance.new("TextButton", frame)
+saveBtn.Size = UDim2.new(0.85, 0, 0, 45)
+saveBtn.Position = UDim2.new(0.075, 0, 0.15, 0)
+saveBtn.Text = "Save Position"
+saveBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+saveBtn.TextColor3 = Color3.white
+saveBtn.Font = Enum.Font.GothamMedium
+Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 6)
+
+local loadBtn = Instance.new("TextButton", frame)
+loadBtn.Size = UDim2.new(0.85, 0, 0, 45)
+loadBtn.Position = UDim2.new(0.075, 0, 0.4, 0)
+loadBtn.Text = "Go to Position"
+loadBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+loadBtn.TextColor3 = Color3.white
+loadBtn.Font = Enum.Font.GothamMedium
+Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 6)
+
+local credit = Instance.new("TextLabel", frame)
+credit.Size = UDim2.new(1, 0, 0, 30)
+credit.Position = UDim2.new(0, 0, 1, -35)
+credit.Text = "mindflux made this"
+credit.TextColor3 = Color3.fromRGB(180, 180, 180)
+credit.BackgroundTransparency = 1
+credit.Font = Enum.Font.Code
+credit.TextSize = 13
+
+-- 5. Functional Logic
+local savedCFrame = nil
+
+toggleBtn.MouseButton1Click:Connect(function()
+	frame.Visible = not frame.Visible
+end)
+
+saveBtn.MouseButton1Click:Connect(function()
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if root then
+		savedCFrame = root.CFrame
+		saveBtn.Text = "Saved!"
+		task.wait(0.5)
+		saveBtn.Text = "Save Position"
+	end
+end)
+
+loadBtn.MouseButton1Click:Connect(function()
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if root and savedCFrame then
+		local info = TweenInfo.new(0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+		local tween = TweenService:Create(root, info, {CFrame = savedCFrame})
+		tween:Play()
+	else
+		loadBtn.Text = "Nothing Saved!"
+		task.wait(0.5)
+		loadBtn.Text = "Go to Position"
+	end
+end)
